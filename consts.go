@@ -46,3 +46,19 @@ func TLSCertificatePath() string {
 func TLSPrivateKeyPath() string {
 	return os.Getenv("TLS_PRIVATE_KEY_PATH")
 }
+
+func ChannelSecret(botName string) string {
+	return os.Getenv(botName + "_SECRET")
+}
+
+func ChannelAccessToken(botName string) string {
+	return os.Getenv(botName + "_ACCESS_TOKEN")
+}
+
+func GroupID(botName string) string {
+	return os.Getenv(botName + "_GROUP_ID")
+}
+
+func ProblemTemplatePath() string {
+	return os.Getenv("PROBLEM_TEMPLATE_PATH")
+}
