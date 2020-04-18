@@ -127,8 +127,34 @@ func (h *AppHandler) Webhook(c echo.Context) error {
 			groupID = lineEvent.Source.GroupID
 		}
 
-		print(groupID)
+		print(groupID + "\n")
 	}
 
+	return c.NoContent(http.StatusOK)
+}
+
+func (h *AppHandler) LiffPage(c echo.Context) error {
+	return c.Render(http.StatusOK, "liff.html", map[string]interface{}{
+		"options": []string{"選択肢1", "選択肢2", "選択肢3", "選択肢4"},
+	})
+}
+
+func (h *AppHandler) LiffSubmit(c echo.Context) error {
+	type Parameter struct {
+		UserID   string `json:"userID"`
+		UserName string `json:"userName"`
+		Option   int    `json:"option"`
+		Comment  string `json:"comment"`
+	}
+
+	param := new(Parameter)
+	if err := c.Bind(param); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid parameter")
+	}
+
+	print(param.UserID)
+	print(param.UserName)
+	print(param.Option)
+	print(param.Comment)
 	return c.NoContent(http.StatusOK)
 }
