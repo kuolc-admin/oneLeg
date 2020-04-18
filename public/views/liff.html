@@ -116,7 +116,7 @@
 </head>
 <body>
 <h3>選択肢</h3>
-<input type="hidden" name="option">
+<input type="hidden" name="option" value="-1">
 <div class="container">
     {{range $index, $label := .options}}
     <a href="javascript:void(0)" class="btn-flat-border" id="button_option{{$index}}">{{$label}}</a>
@@ -136,7 +136,13 @@
 liff.init({liffId: "1654090449-62QRAB0Z"});
 
 $('#button_submit').click(async function() {
+    const option = $('input[name="option"]').val();
+    const comment = $('input[name="comment"]').val();
     const profile = await liff.getProfile();
+
+    if (option == -1) {
+        return
+    }
 
     $.ajax({
         url: "/liff",
@@ -144,8 +150,8 @@ $('#button_submit').click(async function() {
         data: {
             'userID': profile.userId,
             'userName': profile.displayName,
-            "option": $('input[name="option"]').val(),
-            "comment": $('input[name="comment"]').val(),
+            "option": option,
+            "comment": comment,
         },
     }).done(function() {
         liff.closeWindow();

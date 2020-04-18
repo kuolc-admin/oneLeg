@@ -62,3 +62,15 @@ func GroupID(botName string) string {
 func ProblemTemplatePath() string {
 	return os.Getenv("PROBLEM_TEMPLATE_PATH")
 }
+
+func GoogleCredentialPath() string {
+	return os.Getenv("GOOGLE_CREDENTIAL_PATH")
+}
+
+func ProblemSheetID() string {
+	return os.Getenv("PROBLEM_SHEET_ID")
+}
+
+func PushProblemAt() int {
+	return 10
+}

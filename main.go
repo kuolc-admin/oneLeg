@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"html/template"
 	"io"
 
 	"github.com/aruga-dev/arugaONE-API/util/consts"
+	"github.com/kawasin73/htask/cron"
+	"github.com/kuolc/oneLeg/scheduler"
+
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 )
@@ -20,6 +24,14 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 func main() {
 	h := &AppHandler{}
 
+	scheduler.Set("push_problem", func(cr *cron.Cron) *scheduler.Job {
+		cancel, _ := cr.Every(1).Day().At(PushProblemAt()).Run(func() {
+			h.PushProblem(context.Background())
+		})
+
+		return &scheduler.Job{Cancel: cancel}
+	})
+
 	e := echo.New()
 
 	e.Renderer = &Template{
@@ -27,7 +39,6 @@ func main() {
 	}
 
 	e.Use(middleware.Recover())
-	e.POST("/push", h.PushMessage)
 	e.POST("/webhook/:botName", h.Webhook)
 	e.GET("/liff", h.LiffPage)
 	e.POST("/liff", h.LiffSubmit)
