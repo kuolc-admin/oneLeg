@@ -63,6 +63,10 @@ func ProblemTemplatePath() string {
 	return os.Getenv("PROBLEM_TEMPLATE_PATH")
 }
 
+func EditorialTemplatePath() string {
+	return os.Getenv("EDITORIAL_TEMPLATE_PATH")
+}
+
 func GoogleCredentialPath() string {
 	return os.Getenv("GOOGLE_CREDENTIAL_PATH")
 }
@@ -73,4 +77,8 @@ func ProblemSheetID() string {
 
 func PushProblemAt() int {
 	return 10
+}
+
+func PushEditorialAt() int {
+	return 20
 }

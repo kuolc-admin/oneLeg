@@ -28,15 +28,22 @@ type AppHandler struct {
 }
 
 type Problem struct {
-	ID           int
-	Text         string
-	ImageURL     string
-	Setter       string
-	Difficulty   int
-	Options      []string
-	Editorial    string
-	Comment      string
-	HasSubmitted bool
+	ID                int
+	Text              string
+	ProblemImageURL   string
+	EditorialImageURL string
+	Setter            string
+	Difficulty        int
+	Options           []string
+	Editorial         string
+	Comment           string
+	HasSubmitted      bool
+}
+
+type Answer struct {
+	UserName string
+	Option   int
+	Comment  string
 }
 
 func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
@@ -46,10 +53,10 @@ func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
 		case "番号":
 			id, _ := strconv.Atoi(value.(string))
 			p.ID = id
-		case "画像ID":
+		case "出題画像ID":
 			imageID := value.(string)
 			if imageID != "" {
-				p.ImageURL = "https://drive.google.com/uc?export=view&id=" + imageID
+				p.ProblemImageURL = "https://drive.google.com/uc?export=view&id=" + imageID
 			}
 		case "出題文":
 			p.Text = value.(string)
@@ -74,7 +81,12 @@ func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
 			if option := value.(string); option != "" {
 				options = append(options, option)
 			}
-		case "解説":
+		case "解説画像ID":
+			imageID := value.(string)
+			if imageID != "" {
+				p.EditorialImageURL = "https://drive.google.com/uc?export=view&id=" + imageID
+			}
+		case "解説文":
 			p.Editorial = value.(string)
 		case "備考":
 			p.Comment = value.(string)
@@ -85,7 +97,7 @@ func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
 	}
 
 	p.Options = options
-	return p.ImageURL != ""
+	return p.ProblemImageURL != ""
 }
 
 func (h *AppHandler) readProblems(ctx context.Context) ([]*Problem, error) {
@@ -237,10 +249,12 @@ func (h *AppHandler) LiffSubmit(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid parameter")
 	}
 
-	print(param.UserID)
-	print(param.UserName)
-	print(param.Option)
-	print(param.Comment)
+	h.answers[param.UserID] = &Answer{
+		UserName: param.UserName,
+		Option:   param.Option,
+		Comment:  param.Comment,
+	}
+
 	return c.NoContent(http.StatusOK)
 }
 
@@ -276,11 +290,95 @@ func (h *AppHandler) PushProblem(ctx context.Context) error {
 			"今日の1レッグ",
 			ProblemTemplatePath(),
 			map[string]interface{}{
-				"imageURL":   h.problem.ImageURL,
+				"imageURL":   h.problem.ProblemImageURL,
 				"text":       h.problem.Text,
 				"difficulty": h.problem.Difficulty,
 				"setter":     h.problem.Setter,
 			},
+		)
+	}
+
+	return nil
+}
+
+func (h *AppHandler) PushEditorial(ctx context.Context) error {
+	if h.problem == nil {
+		return nil
+	}
+
+	type Result struct {
+		Option     string `json:"option"`
+		Rate       int    `json:"rate"`
+		Count      int    `json:"count"`
+		IsMajority bool   `json:"isMajority"`
+	}
+
+	type Comment struct {
+		UserName string `json:"userName"`
+		Text     string `json:"text"`
+	}
+
+	results := []*Result{}
+	comments := []*Comment{}
+
+	for _, option := range h.problem.Options {
+		results = append(results, &Result{
+			Option: option,
+			Rate:   0,
+			Count:  0,
+		})
+	}
+
+	maxCount := 0
+	for _, answer := range h.answers {
+		count := results[answer.Option].Count + 1
+		results[answer.Option].Count = count
+		if count > maxCount {
+			maxCount = count
+		}
+
+		if answer.Comment != "" {
+			comments = append(comments, &Comment{
+				UserName: answer.UserName,
+				Text:     answer.Comment,
+			})
+		}
+	}
+
+	for _, result := range results {
+		result.Rate = result.Count * 100 / len(h.answers)
+		result.IsMajority = (result.Count == maxCount)
+	}
+
+	args := map[string]interface{}{
+		"imageURL": h.problem.EditorialImageURL,
+		"text":     h.problem.Editorial,
+		"results":  results,
+		"comments": comments,
+	}
+
+	b, _ := json.Marshal(args)
+	json.Unmarshal(b, &args)
+
+	botNames := []string{
+		"CHIMPANZEE", "CRAB", "RABBIT", "HAMSTER",
+	}
+
+	for _, botName := range botNames {
+		channelAccessToken := ChannelAccessToken(botName)
+		groupID := GroupID(botName)
+
+		if channelAccessToken == "" || groupID == "" {
+			continue
+		}
+
+		h.pushFlexMessage(
+			ctx,
+			channelAccessToken,
+			groupID,
+			"今日の1レッグ（解説）",
+			EditorialTemplatePath(),
+			args,
 		)
 	}
 
