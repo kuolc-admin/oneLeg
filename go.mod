@@ -3,7 +3,9 @@ module github.com/kuolc/oneLeg
 go 1.12
 
 require (
-	github.com/aruga-dev/arugaONE-API v0.9.2
+	cloud.google.com/go/firestore v1.1.0
+	firebase.google.com/go v3.11.1+incompatible
+	github.com/aruga-dev/arugaONE-API v1.1.0
 	github.com/google/go-jsonnet v0.15.0
 	github.com/joho/godotenv v1.3.0
 	github.com/kawasin73/htask v0.4.1
