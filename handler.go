@@ -5,13 +5,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
 
+	"cloud.google.com/go/firestore"
 	"github.com/google/go-jsonnet"
+	"github.com/kuolc/oneLeg/consts"
+	"github.com/kuolc/oneLeg/firebase_"
+	"github.com/kuolc/oneLeg/json_"
 	"github.com/line/line-bot-sdk-go/linebot"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -28,22 +34,27 @@ type AppHandler struct {
 }
 
 type Problem struct {
-	ID                int
-	Text              string
-	ProblemImageURL   string
-	EditorialImageURL string
-	Setter            string
-	Difficulty        int
-	Options           []string
-	Editorial         string
-	Comment           string
-	HasSubmitted      bool
+	ID                string   `json:"-"`
+	Index             int      `json:"index"`
+	Text              string   `json:"text"`
+	ProblemImageURL   string   `json:"problemImageURL"`
+	EditorialImageURL string   `json:"editorialImageURL"`
+	Setter            string   `json:"setter"`
+	Difficulty        int      `json:"difficulty"`
+	Options           []string `json:"options"`
+	Editorial         string   `json:"editorial"`
+	Note              string   `json:"note"`
+	HasSubmitted      bool     `json:"-"`
 }
 
 type Answer struct {
-	UserName string
-	Option   int
-	Comment  string
+	ID          string `json:"-"`
+	ProblemID   string `json:"problemID"`
+	UserID      string `json:"userID"`
+	UserName    string `json:"userName"`
+	UserGroupID string `json:"userGroupID"`
+	Option      int    `json:"option"`
+	Comment     string `json:"comment"`
 }
 
 func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
@@ -51,8 +62,8 @@ func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
 	for index, value := range row {
 		switch header[index] {
 		case "番号":
-			id, _ := strconv.Atoi(value.(string))
-			p.ID = id
+			index, _ := strconv.Atoi(value.(string))
+			p.Index = index
 		case "出題画像ID":
 			imageID := value.(string)
 			if imageID != "" {
@@ -89,7 +100,7 @@ func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
 		case "解説文":
 			p.Editorial = value.(string)
 		case "備考":
-			p.Comment = value.(string)
+			p.Note = value.(string)
 		case "出題済":
 			hasSubmitted, _ := strconv.Atoi(value.(string))
 			p.HasSubmitted = (hasSubmitted == 1)
@@ -101,7 +112,7 @@ func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
 }
 
 func (h *AppHandler) readProblems(ctx context.Context) ([]*Problem, error) {
-	b, err := ioutil.ReadFile(GoogleCredentialPath())
+	b, err := ioutil.ReadFile(consts.GoogleCredentialPath())
 	if err != nil {
 		return []*Problem{}, err
 	}
@@ -126,7 +137,7 @@ func (h *AppHandler) readProblems(ctx context.Context) ([]*Problem, error) {
 		return []*Problem{}, err
 	}
 
-	valueRange, err := sheetService.Spreadsheets.Values.Get(ProblemSheetID(), "問題!A1:K1000").Do()
+	valueRange, err := sheetService.Spreadsheets.Values.Get(consts.ProblemSheetID(), "問題!A1:K1000").Do()
 	if err != nil {
 		return []*Problem{}, err
 	}
@@ -145,6 +156,21 @@ func (h *AppHandler) readProblems(ctx context.Context) ([]*Problem, error) {
 	}
 
 	return problems, nil
+}
+
+func (h *AppHandler) readImageAspectRatio(ctx context.Context, imageURL string) (string, error) {
+	response, err := http.Get(imageURL)
+	if err != nil {
+		return "", err
+	}
+
+	defer response.Body.Close()
+	config, _, err := image.DecodeConfig(response.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%d:%d", config.Width, config.Height), nil
 }
 
 func (h *AppHandler) pushFlexMessage(ctx context.Context, accessToken string, to string, altText string, templateFilePath string, args map[string]interface{}) error {
@@ -196,8 +222,8 @@ func (h *AppHandler) pushFlexMessage(ctx context.Context, accessToken string, to
 func (h *AppHandler) Webhook(c echo.Context) error {
 	botName := c.Param("botName")
 
-	channelSecret := ChannelSecret(botName)
-	channelAccessToken := ChannelAccessToken(botName)
+	channelSecret := consts.ChannelSecret(botName)
+	channelAccessToken := consts.ChannelAccessToken(botName)
 
 	bot, err := linebot.New(channelSecret, channelAccessToken)
 	if err != nil {
@@ -216,7 +242,7 @@ func (h *AppHandler) Webhook(c echo.Context) error {
 			groupID = lineEvent.Source.GroupID
 		}
 
-		print(groupID + "\n")
+		log.Println(groupID)
 	}
 
 	return c.NoContent(http.StatusOK)
@@ -238,10 +264,11 @@ func (h *AppHandler) LiffSubmit(c echo.Context) error {
 	}
 
 	type Parameter struct {
-		UserID   string `json:"userID"`
-		UserName string `json:"userName"`
-		Option   int    `json:"option"`
-		Comment  string `json:"comment"`
+		UserID      string `json:"userID"`
+		UserName    string `json:"userName"`
+		UserGroupID string `json:"userGroupID"`
+		Option      int    `json:"option"`
+		Comment     string `json:"comment"`
 	}
 
 	param := new(Parameter)
@@ -250,9 +277,29 @@ func (h *AppHandler) LiffSubmit(c echo.Context) error {
 	}
 
 	h.answers[param.UserID] = &Answer{
-		UserName: param.UserName,
-		Option:   param.Option,
-		Comment:  param.Comment,
+		ProblemID:   h.problem.ID,
+		UserID:      param.UserID,
+		UserName:    param.UserName,
+		UserGroupID: param.UserGroupID,
+		Option:      param.Option,
+		Comment:     param.Comment,
+	}
+
+	_, err := firebase_.Client.Firestore.Doc("users/" + param.UserID).Get(context.Background())
+	if err != nil {
+		_, err := firebase_.Client.Firestore.Doc("users/"+param.UserID).Create(context.Background(), map[string]interface{}{
+			"name":      param.UserName,
+			"groupID":   param.UserGroupID,
+			"createdAt": firestore.ServerTimestamp,
+		})
+
+		if err != nil {
+			log.Printf(`
+				Failed to create user
+					data: %s
+					message %s
+			`, json_.Marshal(param), err.Error())
+		}
 	}
 
 	return c.NoContent(http.StatusOK)
@@ -268,16 +315,37 @@ func (h *AppHandler) PushProblem(ctx context.Context) error {
 		return nil
 	}
 
-	h.problem = problems[rand.Intn(len(problems))]
+	problem := problems[rand.Intn(len(problems))]
+
+	data := json_.ToMap(problem)
+	data["createdAt"] = firestore.ServerTimestamp
+	problemRef, _, err := firebase_.Client.Firestore.Collection("problems").Add(ctx, data)
+	if err != nil {
+		log.Printf(`
+			Failed to create problem
+				data: %s
+				message %s
+		`, json_.Marshal(problem), err.Error())
+
+		return err
+	}
+
+	problem.ID = problemRef.ID
+	h.problem = problem
 	h.answers = map[string]*Answer{}
+
+	aspectRatio, err := h.readImageAspectRatio(ctx, problem.ProblemImageURL)
+	if err != nil {
+		aspectRatio = "1:1"
+	}
 
 	botNames := []string{
 		"CHIMPANZEE", "CRAB", "RABBIT", "HAMSTER",
 	}
 
 	for _, botName := range botNames {
-		channelAccessToken := ChannelAccessToken(botName)
-		groupID := GroupID(botName)
+		channelAccessToken := consts.ChannelAccessToken(botName)
+		groupID := consts.GroupID(botName)
 
 		if channelAccessToken == "" || groupID == "" {
 			continue
@@ -288,12 +356,13 @@ func (h *AppHandler) PushProblem(ctx context.Context) error {
 			channelAccessToken,
 			groupID,
 			"今日の1レッグ",
-			ProblemTemplatePath(),
+			consts.ProblemTemplatePath(),
 			map[string]interface{}{
-				"imageURL":   h.problem.ProblemImageURL,
-				"text":       h.problem.Text,
-				"difficulty": h.problem.Difficulty,
-				"setter":     h.problem.Setter,
+				"imageURL":         problem.ProblemImageURL,
+				"imageAspectRatio": aspectRatio,
+				"text":             problem.Text,
+				"difficulty":       problem.Difficulty,
+				"setter":           problem.Setter,
 			},
 		)
 	}
@@ -343,6 +412,20 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 				Text:     answer.Comment,
 			})
 		}
+
+		data := json_.ToMap(answer)
+		data["createdAt"] = firestore.ServerTimestamp
+		answerRef, _, err := firebase_.Client.Firestore.Collection("answers").Add(context.Background(), data)
+		if err != nil {
+			log.Printf(`
+				Failed to create answer
+					data: %s
+					message %s
+			`, json_.Marshal(answer), err.Error())
+			continue
+		}
+
+		answer.ID = answerRef.ID
 	}
 
 	for _, result := range results {
@@ -350,23 +433,26 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 		result.IsMajority = (result.Count == maxCount)
 	}
 
-	args := map[string]interface{}{
-		"imageURL": h.problem.EditorialImageURL,
-		"text":     h.problem.Editorial,
-		"results":  results,
-		"comments": comments,
+	aspectRatio, err := h.readImageAspectRatio(ctx, h.problem.EditorialImageURL)
+	if err != nil {
+		aspectRatio = "1:1"
 	}
 
-	b, _ := json.Marshal(args)
-	json.Unmarshal(b, &args)
+	args := json_.ToMap(map[string]interface{}{
+		"imageURL":         h.problem.EditorialImageURL,
+		"imageAspectRatio": aspectRatio,
+		"text":             h.problem.Editorial,
+		"results":          results,
+		"comments":         comments,
+	})
 
 	botNames := []string{
 		"CHIMPANZEE", "CRAB", "RABBIT", "HAMSTER",
 	}
 
 	for _, botName := range botNames {
-		channelAccessToken := ChannelAccessToken(botName)
-		groupID := GroupID(botName)
+		channelAccessToken := consts.ChannelAccessToken(botName)
+		groupID := consts.GroupID(botName)
 
 		if channelAccessToken == "" || groupID == "" {
 			continue
@@ -377,7 +463,7 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 			channelAccessToken,
 			groupID,
 			"今日の1レッグ（解説）",
-			EditorialTemplatePath(),
+			consts.EditorialTemplatePath(),
 			args,
 		)
 	}

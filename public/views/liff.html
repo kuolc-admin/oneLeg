@@ -61,7 +61,7 @@
 
     .btn-flat:hover {
         transition: .4s;
-        background: #77e38d;
+        background: #56a466;
     }
 
     .btn-submit {
@@ -139,6 +139,7 @@ $('#button_submit').click(async function() {
     const option = $('input[name="option"]').val();
     const comment = $('input[name="comment"]').val();
     const profile = await liff.getProfile();
+    const context = await liff.getContext();
 
     if (option == -1) {
         return
@@ -150,6 +151,7 @@ $('#button_submit').click(async function() {
         data: {
             'userID': profile.userId,
             'userName': profile.displayName,
+            'userGroupID': context.groupId,
             "option": option,
             "comment": comment,
         },
