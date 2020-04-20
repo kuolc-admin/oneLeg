@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -236,13 +238,23 @@ func (h *AppHandler) Webhook(c echo.Context) error {
 	}
 
 	for _, lineEvent := range lineEvents {
-		groupID := ""
 		switch lineEvent.Source.Type {
 		case linebot.EventSourceTypeGroup:
-			groupID = lineEvent.Source.GroupID
+			log.Println(lineEvent.Source.GroupID)
 		}
 
-		log.Println(groupID)
+		switch lineEvent.Type {
+		case linebot.EventTypeMessage:
+			switch lineMessage := lineEvent.Message.(type) {
+			case *linebot.TextMessage:
+				switch lineMessage.Text {
+				case "問題":
+					h.PushProblem(context.Background())
+				case "解説":
+					h.PushEditorial(context.Background())
+				}
+			}
+		}
 	}
 
 	return c.NoContent(http.StatusOK)
@@ -254,7 +266,9 @@ func (h *AppHandler) LiffPage(c echo.Context) error {
 	}
 
 	return c.Render(http.StatusOK, "liff.html", map[string]interface{}{
-		"options": h.problem.Options,
+		"text":     h.problem.Text,
+		"imageURL": h.problem.ProblemImageURL,
+		"options":  h.problem.Options,
 	})
 }
 
@@ -442,6 +456,7 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 		"imageURL":         h.problem.EditorialImageURL,
 		"imageAspectRatio": aspectRatio,
 		"text":             h.problem.Editorial,
+		"count":            len(h.answers),
 		"results":          results,
 		"comments":         comments,
 	})

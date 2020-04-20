@@ -112,9 +112,17 @@
         width: 100%;
         transition: 0.4s;
     }
+
+    img {
+        width: 100%;
+        height: auto;
+    }
     </style>
 </head>
 <body>
+<h3>問題</h3>
+<p>{{.text}}</p>
+<img src="{{.imageURL}}">
 <h3>選択肢</h3>
 <input type="hidden" name="option" value="-1">
 <div class="container">
