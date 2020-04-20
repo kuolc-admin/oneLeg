@@ -39,6 +39,7 @@ type Problem struct {
 	ID                string   `json:"-"`
 	Index             int      `json:"index"`
 	Text              string   `json:"text"`
+	OriginalImageURL  string   `json:"originalImageURL"`
 	ProblemImageURL   string   `json:"problemImageURL"`
 	EditorialImageURL string   `json:"editorialImageURL"`
 	Setter            string   `json:"setter"`
@@ -66,6 +67,11 @@ func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
 		case "番号":
 			index, _ := strconv.Atoi(value.(string))
 			p.Index = index
+		case "元画像ID":
+			imageID := value.(string)
+			if imageID != "" {
+				p.OriginalImageURL = "https://drive.google.com/uc?export=view&id=" + imageID
+			}
 		case "出題画像ID":
 			imageID := value.(string)
 			if imageID != "" {
@@ -109,8 +115,12 @@ func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
 		}
 	}
 
+	if p.ProblemImageURL == "" {
+		p.ProblemImageURL = p.OriginalImageURL
+	}
+
 	p.Options = options
-	return p.ProblemImageURL != ""
+	return p.OriginalImageURL != ""
 }
 
 func (h *AppHandler) readProblems(ctx context.Context) ([]*Problem, error) {
@@ -139,7 +149,7 @@ func (h *AppHandler) readProblems(ctx context.Context) ([]*Problem, error) {
 		return []*Problem{}, err
 	}
 
-	valueRange, err := sheetService.Spreadsheets.Values.Get(consts.ProblemSheetID(), "問題!A1:K1000").Do()
+	valueRange, err := sheetService.Spreadsheets.Values.Get(consts.ProblemSheetID(), "問題!A1:Z1000").Do()
 	if err != nil {
 		return []*Problem{}, err
 	}
@@ -348,7 +358,7 @@ func (h *AppHandler) PushProblem(ctx context.Context) error {
 	h.problem = problem
 	h.answers = map[string]*Answer{}
 
-	aspectRatio, err := h.readImageAspectRatio(ctx, problem.ProblemImageURL)
+	aspectRatio, err := h.readImageAspectRatio(ctx, problem.OriginalImageURL)
 	if err != nil {
 		aspectRatio = "1:1"
 	}
@@ -372,7 +382,7 @@ func (h *AppHandler) PushProblem(ctx context.Context) error {
 			"今日の1レッグ",
 			consts.ProblemTemplatePath(),
 			map[string]interface{}{
-				"imageURL":         problem.ProblemImageURL,
+				"imageURL":         problem.OriginalImageURL,
 				"imageAspectRatio": aspectRatio,
 				"text":             problem.Text,
 				"difficulty":       problem.Difficulty,
