@@ -5,10 +5,9 @@ import (
 	"html/template"
 	"io"
 
-	"github.com/aruga-dev/arugaONE-API/util/consts"
 	"github.com/kawasin73/htask/cron"
+	"github.com/kuolc/oneLeg/consts"
 	"github.com/kuolc/oneLeg/scheduler"
-
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 )
@@ -25,8 +24,16 @@ func main() {
 	h := &AppHandler{}
 
 	scheduler.Set("push_problem", func(cr *cron.Cron) *scheduler.Job {
-		cancel, _ := cr.Every(1).Day().At(PushProblemAt()).Run(func() {
+		cancel, _ := cr.Every(1).Day().At(consts.PushProblemAt()).Run(func() {
 			h.PushProblem(context.Background())
+		})
+
+		return &scheduler.Job{Cancel: cancel}
+	})
+
+	scheduler.Set("push_editorial", func(cr *cron.Cron) *scheduler.Job {
+		cancel, _ := cr.Every(1).Day().At(consts.PushEditorialAt()).Run(func() {
+			h.PushEditorial(context.Background())
 		})
 
 		return &scheduler.Job{Cancel: cancel}
