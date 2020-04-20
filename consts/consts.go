@@ -76,9 +76,9 @@ func ProblemSheetID() string {
 }
 
 func PushProblemAt() int {
-	return 10
+	return 9
 }
 
 func PushEditorialAt() int {
-	return 20
+	return 19
 }
