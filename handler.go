@@ -475,7 +475,7 @@ func (h *AppHandler) PushProblem(ctx context.Context) error {
 			continue
 		}
 
-		h.pushFlexMessage(
+		err = h.pushFlexMessage(
 			ctx,
 			channelAccessToken,
 			groupID,
@@ -489,6 +489,15 @@ func (h *AppHandler) PushProblem(ctx context.Context) error {
 				"setter":           problem.Setter,
 			},
 		)
+
+		if err != nil {
+			log.Printf(`
+				Failed to push problem
+					botName: %s
+					problemID: %d
+					message: %s
+			`, botName, problem.Index, err.Error())
+		}
 	}
 
 	return nil
@@ -583,7 +592,7 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 			continue
 		}
 
-		h.pushFlexMessage(
+		err = h.pushFlexMessage(
 			ctx,
 			channelAccessToken,
 			groupID,
@@ -591,6 +600,15 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 			consts.EditorialTemplatePath(),
 			args,
 		)
+
+		if err != nil {
+			log.Printf(`
+				Failed to push editorial
+					botName: %s
+					problemID: %d
+					message: %s
+			`, botName, h.problem.Index, err.Error())
+		}
 	}
 
 	return nil
