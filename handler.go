@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"cloud.google.com/go/firestore"
 	"github.com/google/go-jsonnet"
@@ -58,6 +59,13 @@ type Answer struct {
 	UserGroupID string `json:"userGroupID"`
 	Option      int    `json:"option"`
 	Comment     string `json:"comment"`
+}
+
+type OMap struct {
+	Name  string `json:"name"`
+	Year  int    `json:"year"`
+	Event string `json:"event"`
+	URL   string `json:"mapURL"`
 }
 
 func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
@@ -123,6 +131,24 @@ func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
 	return p.OriginalImageURL != ""
 }
 
+func (m *OMap) FromRow(header []interface{}, row []interface{}) bool {
+	for index, value := range row {
+		switch header[index] {
+		case "テレイン名":
+			m.Name = value.(string)
+		case "年度":
+			year, _ := strconv.Atoi(value.(string))
+			m.Year = year
+		case "イベント名":
+			m.Event = value.(string)
+		case "URL":
+			m.URL = value.(string)
+		}
+	}
+
+	return m.Name != ""
+}
+
 func (h *AppHandler) readProblems(ctx context.Context) ([]*Problem, error) {
 	b, err := ioutil.ReadFile(consts.GoogleCredentialPath())
 	if err != nil {
@@ -168,6 +194,53 @@ func (h *AppHandler) readProblems(ctx context.Context) ([]*Problem, error) {
 	}
 
 	return problems, nil
+}
+
+func (h *AppHandler) readOMaps(ctx context.Context) ([]*OMap, error) {
+	b, err := ioutil.ReadFile(consts.GoogleCredentialPath())
+	if err != nil {
+		return []*OMap{}, err
+	}
+
+	credential := map[string]interface{}{}
+	err = json.Unmarshal(b, &credential)
+	if err != nil {
+		return []*OMap{}, err
+	}
+
+	config := &jwt.Config{
+		Email:      credential["client_email"].(string),
+		PrivateKey: []byte(credential["private_key"].(string)),
+		Scopes: []string{
+			"https://www.googleapis.com/auth/drive",
+		},
+		TokenURL: google.JWTTokenURL,
+	}
+
+	sheetService, err := sheets.NewService(ctx, option.WithTokenSource(config.TokenSource(oauth2.NoContext)))
+	if err != nil {
+		return []*OMap{}, err
+	}
+
+	valueRange, err := sheetService.Spreadsheets.Values.Get(consts.SheetID(), "地図!A1:D500").Do()
+	if err != nil {
+		return []*OMap{}, err
+	}
+
+	header := valueRange.Values[0]
+	maps := []*OMap{}
+	for index, row := range valueRange.Values {
+		if index == 0 {
+			continue
+		}
+
+		omap := new(OMap)
+		if omap.FromRow(header, row) {
+			maps = append(maps, omap)
+		}
+	}
+
+	return maps, nil
 }
 
 func (h *AppHandler) readImageAspectRatio(ctx context.Context, imageURL string) (string, error) {
@@ -262,6 +335,33 @@ func (h *AppHandler) Webhook(c echo.Context) error {
 					h.PushProblem(context.Background())
 				case "解説":
 					h.PushEditorial(context.Background())
+				case "地図":
+					maps, err := h.readOMaps(context.Background())
+					if err != nil {
+						_, err = bot.ReplyMessage(lineEvent.ReplyToken, linebot.NewTextMessage("エラーが発生しました。もう一度お試しください。")).Do()
+						if err != nil {
+							log.Printf(`
+								Failed to reply message
+									message %s
+							`, err.Error())
+						}
+						continue
+					}
+
+					omap := maps[rand.Intn(len(maps))]
+					lines := []string{
+						omap.Name,
+						fmt.Sprintf("%d年度 %s", omap.Year, omap.Event),
+						omap.URL,
+					}
+
+					_, err = bot.ReplyMessage(lineEvent.ReplyToken, linebot.NewTextMessage(strings.Join(lines, "\n"))).Do()
+					if err != nil {
+						log.Printf(`
+							Failed to reply message
+								message %s
+						`, err.Error())
+					}
 				}
 			}
 		}
