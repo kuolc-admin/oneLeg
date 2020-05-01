@@ -338,6 +338,11 @@ func (h *AppHandler) Webhook(c echo.Context) error {
 				case "地図":
 					maps, err := h.readOMaps(context.Background())
 					if err != nil {
+						log.Printf(`
+							Failed to read maps
+								message %s
+						`, err.Error())
+
 						_, err = bot.ReplyMessage(lineEvent.ReplyToken, linebot.NewTextMessage("エラーが発生しました。もう一度お試しください。")).Do()
 						if err != nil {
 							log.Printf(`
