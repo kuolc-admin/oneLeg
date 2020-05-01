@@ -149,7 +149,7 @@ func (h *AppHandler) readProblems(ctx context.Context) ([]*Problem, error) {
 		return []*Problem{}, err
 	}
 
-	valueRange, err := sheetService.Spreadsheets.Values.Get(consts.ProblemSheetID(), "問題!A1:Z1000").Do()
+	valueRange, err := sheetService.Spreadsheets.Values.Get(consts.SheetID(), "問題!A1:N500").Do()
 	if err != nil {
 		return []*Problem{}, err
 	}

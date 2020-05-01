@@ -71,8 +71,8 @@ func GoogleCredentialPath() string {
 	return os.Getenv("GOOGLE_CREDENTIAL_PATH")
 }
 
-func ProblemSheetID() string {
-	return os.Getenv("PROBLEM_SHEET_ID")
+func SheetID() string {
+	return os.Getenv("SHEET_ID")
 }
 
 func PushProblemAt() int {
