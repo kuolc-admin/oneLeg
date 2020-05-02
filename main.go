@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"io"
 	"log"
+	"time"
 
 	"github.com/kawasin73/htask/cron"
 	"github.com/kuolc/oneLeg/consts"
@@ -40,6 +41,11 @@ func main() {
 
 	scheduler.Set("push_problem", func(cr *cron.Cron) *scheduler.Job {
 		cancel, _ := cr.Every(1).Day().At(consts.PushProblemAt()).Run(func() {
+			weekday := time.Now().Weekday()
+			if !(weekday >= 1 && weekday <= 5) {
+				return
+			}
+
 			err := h.PushProblem(context.Background())
 			if err != nil {
 				log.Printf(`
