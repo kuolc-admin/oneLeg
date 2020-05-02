@@ -4,6 +4,7 @@ import (
 	"context"
 	"html/template"
 	"io"
+	"log"
 
 	"github.com/kawasin73/htask/cron"
 	"github.com/kuolc/oneLeg/consts"
@@ -23,9 +24,29 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 func main() {
 	h := &AppHandler{}
 
+	scheduler.Set("update_maps", func(cr *cron.Cron) *scheduler.Job {
+		cancel, _ := cr.Every(1).Day().At(consts.UpdateMapsAt()).Run(func() {
+			err := h.UpdateMaps(context.Background())
+			if err != nil {
+				log.Printf(`
+					Failed to update maps
+						message %s
+				`, err.Error())
+			}
+		})
+
+		return &scheduler.Job{Cancel: cancel}
+	})
+
 	scheduler.Set("push_problem", func(cr *cron.Cron) *scheduler.Job {
 		cancel, _ := cr.Every(1).Day().At(consts.PushProblemAt()).Run(func() {
-			h.PushProblem(context.Background())
+			err := h.PushProblem(context.Background())
+			if err != nil {
+				log.Printf(`
+					Failed to push problem
+						message %s
+				`, err.Error())
+			}
 		})
 
 		return &scheduler.Job{Cancel: cancel}
@@ -33,11 +54,25 @@ func main() {
 
 	scheduler.Set("push_editorial", func(cr *cron.Cron) *scheduler.Job {
 		cancel, _ := cr.Every(1).Day().At(consts.PushEditorialAt()).Run(func() {
-			h.PushEditorial(context.Background())
+			err := h.PushEditorial(context.Background())
+			if err != nil {
+				log.Printf(`
+					Failed to push editorial
+						message %s
+				`, err.Error())
+			}
 		})
 
 		return &scheduler.Job{Cancel: cancel}
 	})
+
+	err := h.UpdateMaps(context.Background())
+	if err != nil {
+		log.Printf(`
+			Failed to update maps
+				message %s
+		`, err.Error())
+	}
 
 	e := echo.New()
 

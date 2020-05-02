@@ -34,6 +34,7 @@ import (
 type AppHandler struct {
 	problem *Problem
 	answers map[string]*Answer
+	maps    []*OMap
 }
 
 type Problem struct {
@@ -62,10 +63,11 @@ type Answer struct {
 }
 
 type OMap struct {
-	Name  string `json:"name"`
-	Year  int    `json:"year"`
-	Event string `json:"event"`
-	URL   string `json:"mapURL"`
+	Name       string   `json:"name"`
+	Year       int      `json:"year"`
+	Event      string   `json:"event"`
+	Regulation string   `json:"regulation"`
+	URLs       []string `json:"urls"`
 }
 
 func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
@@ -92,19 +94,7 @@ func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
 		case "難易度":
 			difficulty, _ := strconv.Atoi(value.(string))
 			p.Difficulty = difficulty
-		case "選択肢1":
-			if option := value.(string); option != "" {
-				options = append(options, option)
-			}
-		case "選択肢2":
-			if option := value.(string); option != "" {
-				options = append(options, option)
-			}
-		case "選択肢3":
-			if option := value.(string); option != "" {
-				options = append(options, option)
-			}
-		case "選択肢4":
+		case "選択肢1", "選択肢2", "選択肢3", "選択肢4":
 			if option := value.(string); option != "" {
 				options = append(options, option)
 			}
@@ -132,6 +122,7 @@ func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
 }
 
 func (m *OMap) FromRow(header []interface{}, row []interface{}) bool {
+	urls := []string{}
 	for index, value := range row {
 		switch header[index] {
 		case "テレイン名":
@@ -141,11 +132,16 @@ func (m *OMap) FromRow(header []interface{}, row []interface{}) bool {
 			m.Year = year
 		case "イベント名":
 			m.Event = value.(string)
-		case "URL":
-			m.URL = value.(string)
+		case "競技形式":
+			m.Regulation = value.(string)
+		case "URL1", "URL2":
+			if url := value.(string); url != "" {
+				urls = append(urls, url)
+			}
 		}
 	}
 
+	m.URLs = urls
 	return m.Name != ""
 }
 
@@ -175,7 +171,7 @@ func (h *AppHandler) readProblems(ctx context.Context) ([]*Problem, error) {
 		return []*Problem{}, err
 	}
 
-	valueRange, err := sheetService.Spreadsheets.Values.Get(consts.SheetID(), "問題!A1:N500").Do()
+	valueRange, err := sheetService.Spreadsheets.Values.Get(consts.SheetID(), "問題!A1:N1000").Do()
 	if err != nil {
 		return []*Problem{}, err
 	}
@@ -222,7 +218,7 @@ func (h *AppHandler) readOMaps(ctx context.Context) ([]*OMap, error) {
 		return []*OMap{}, err
 	}
 
-	valueRange, err := sheetService.Spreadsheets.Values.Get(consts.SheetID(), "地図!A1:D500").Do()
+	valueRange, err := sheetService.Spreadsheets.Values.Get(consts.SheetID(), "地図!A1:F1000").Do()
 	if err != nil {
 		return []*OMap{}, err
 	}
@@ -330,35 +326,44 @@ func (h *AppHandler) Webhook(c echo.Context) error {
 		case linebot.EventTypeMessage:
 			switch lineMessage := lineEvent.Message.(type) {
 			case *linebot.TextMessage:
-				switch lineMessage.Text {
+				queries := strings.Split(lineMessage.Text, "　")
+				switch queries[0] {
 				case "問題":
-					h.PushProblem(context.Background())
-				case "解説":
-					h.PushEditorial(context.Background())
-				case "地図":
-					maps, err := h.readOMaps(context.Background())
+					err = h.PushProblem(context.Background())
 					if err != nil {
 						log.Printf(`
-							Failed to read maps
+							Failed to push problem
 								message %s
 						`, err.Error())
-
-						_, err = bot.ReplyMessage(lineEvent.ReplyToken, linebot.NewTextMessage("エラーが発生しました。もう一度お試しください。")).Do()
-						if err != nil {
-							log.Printf(`
-								Failed to reply message
-									message %s
-							`, err.Error())
+					}
+				case "解説":
+					err = h.PushEditorial(context.Background())
+					if err != nil {
+						log.Printf(`
+							Failed to push editorial
+								message %s
+						`, err.Error())
+					}
+				case "地図":
+					maps := []*OMap{}
+					for _, omap := range h.maps {
+						ok := (len(queries) == 1)
+						if len(queries) > 1 {
+							for _, q := range queries[1:] {
+								ok = ok || (omap.Regulation == q)
+							}
 						}
-						continue
+
+						if ok {
+							maps = append(maps, omap)
+						}
 					}
 
 					omap := maps[rand.Intn(len(maps))]
-					lines := []string{
+					lines := append([]string{
 						omap.Name,
-						fmt.Sprintf("%d年度 %s", omap.Year, omap.Event),
-						omap.URL,
-					}
+						fmt.Sprintf("%d年度 %s (%s)", omap.Year, omap.Event, omap.Regulation),
+					}, omap.URLs...)
 
 					_, err = bot.ReplyMessage(lineEvent.ReplyToken, linebot.NewTextMessage(strings.Join(lines, "\n"))).Do()
 					if err != nil {
@@ -432,6 +437,16 @@ func (h *AppHandler) LiffSubmit(c echo.Context) error {
 	}
 
 	return c.NoContent(http.StatusOK)
+}
+
+func (h *AppHandler) UpdateMaps(ctx context.Context) error {
+	maps, err := h.readOMaps(context.Background())
+	if err != nil {
+		return err
+	}
+
+	h.maps = maps
+	return nil
 }
 
 func (h *AppHandler) PushProblem(ctx context.Context) error {

@@ -75,6 +75,10 @@ func SheetID() string {
 	return os.Getenv("SHEET_ID")
 }
 
+func UpdateMapsAt() int {
+	return 0
+}
+
 func PushProblemAt() int {
 	return 9
 }
