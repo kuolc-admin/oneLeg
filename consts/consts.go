@@ -60,11 +60,11 @@ func GroupID(botName string) string {
 }
 
 func ProblemTemplatePath() string {
-	return os.Getenv("PROBLEM_TEMPLATE_PATH")
+	return os.Getenv("resources/problem.jsonnet")
 }
 
 func EditorialTemplatePath() string {
-	return os.Getenv("EDITORIAL_TEMPLATE_PATH")
+	return os.Getenv("resources/editorial.jsonnet")
 }
 
 func GoogleCredentialPath() string {

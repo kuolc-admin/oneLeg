@@ -1,6 +1,4 @@
 
 .env
 oneLeg
-problem.jsonnet
-editorial.jsonnet
-googleCredential.json
+credentials/
