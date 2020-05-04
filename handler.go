@@ -582,7 +582,9 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 	}
 
 	for _, result := range results {
-		result.Rate = result.Count * 100 / len(h.answers)
+		if len(h.answers) > 0 {
+			result.Rate = result.Count * 100 / len(h.answers)
+		}
 		result.IsMajority = (result.Count == maxCount)
 	}
 
