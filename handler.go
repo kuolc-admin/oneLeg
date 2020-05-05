@@ -116,8 +116,9 @@ func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
 		case "備考":
 			p.Note = value.(string)
 		case "出題済":
-			hasSubmitted, _ := strconv.Atoi(value.(string))
-			p.HasSubmitted = (hasSubmitted == 1)
+			hasSubmitted, _ := value.(string)
+			p.HasSubmitted = (hasSubmitted == "1")
+			log.Println(p.HasSubmitted)
 		}
 	}
 
@@ -229,7 +230,7 @@ func (h *AppHandler) setProblemSubmitted(ctx context.Context, index int) error {
 	_, err = sheetService.Spreadsheets.Values.Update(consts.SheetID(), fmt.Sprintf("問題!N%d", index+1), &sheets.ValueRange{
 		Values: [][]interface{}{
 			[]interface{}{
-				1,
+				"1",
 			},
 		},
 	}).ValueInputOption("USER_ENTERED").Do()
