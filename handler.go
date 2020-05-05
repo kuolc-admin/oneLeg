@@ -192,12 +192,49 @@ func (h *AppHandler) readProblems(ctx context.Context) ([]*Problem, error) {
 		}
 
 		problem := new(Problem)
-		if problem.FromRow(header, row) {
+		if problem.FromRow(header, row) && !problem.HasSubmitted {
 			problems = append(problems, problem)
 		}
 	}
 
 	return problems, nil
+}
+
+func (h *AppHandler) setProblemSubmitted(ctx context.Context, index int) error {
+	b, err := ioutil.ReadFile(consts.GoogleCredentialPath())
+	if err != nil {
+		return err
+	}
+
+	credential := map[string]interface{}{}
+	err = json.Unmarshal(b, &credential)
+	if err != nil {
+		return err
+	}
+
+	config := &jwt.Config{
+		Email:      credential["client_email"].(string),
+		PrivateKey: []byte(credential["private_key"].(string)),
+		Scopes: []string{
+			"https://www.googleapis.com/auth/drive",
+		},
+		TokenURL: google.JWTTokenURL,
+	}
+
+	sheetService, err := sheets.NewService(ctx, option.WithTokenSource(config.TokenSource(oauth2.NoContext)))
+	if err != nil {
+		return err
+	}
+
+	_, err = sheetService.Spreadsheets.Values.Update(consts.SheetID(), fmt.Sprintf("問題!N%d", index+1), &sheets.ValueRange{
+		Values: [][]interface{}{
+			[]interface{}{
+				1,
+			},
+		},
+	}).ValueInputOption("USER_ENTERED").Do()
+
+	return err
 }
 
 func (h *AppHandler) readOMaps(ctx context.Context) ([]*OMap, error) {
@@ -375,16 +412,16 @@ func (h *AppHandler) Webhook(c echo.Context) error {
 					if err != nil {
 						log.Printf(`Failed to reply message: message %s`, err.Error())
 					}
-				case "問題":
-					err = h.PushProblem(context.Background())
-					if err != nil {
-						log.Printf(`Failed to push problem: message %s`, err.Error())
-					}
-				case "解説":
-					err = h.PushEditorial(context.Background())
-					if err != nil {
-						log.Printf(`Failed to push editorial: message %s`, err.Error())
-					}
+				// case "問題":
+				// 	err = h.PushProblem(context.Background())
+				// 	if err != nil {
+				// 		log.Printf(`Failed to push problem: message %s`, err.Error())
+				// 	}
+				// case "解説":
+				// 	err = h.PushEditorial(context.Background())
+				// 	if err != nil {
+				// 		log.Printf(`Failed to push editorial: message %s`, err.Error())
+				// 	}
 				case "地図":
 					maps := []*OMap{}
 					for _, omap := range h.maps {
@@ -566,7 +603,7 @@ func (h *AppHandler) PushProblem(ctx context.Context) error {
 		}
 	}
 
-	return nil
+	return h.setProblemSubmitted(ctx, problem.Index)
 }
 
 func (h *AppHandler) PushEditorial(ctx context.Context) error {
