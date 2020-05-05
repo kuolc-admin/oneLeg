@@ -339,15 +339,15 @@ func (h *AppHandler) Webhook(c echo.Context) error {
 				case "設定":
 					textMessage := linebot.NewTextMessage("名前の公開").
 						WithQuickReplies(linebot.NewQuickReplyItems(
-							linebot.NewQuickReplyButton("", linebot.NewMessageAction("する", "名前の公開: オン")),
-							linebot.NewQuickReplyButton("", linebot.NewMessageAction("しない", "名前の公開: オフ")),
+							linebot.NewQuickReplyButton("", linebot.NewMessageAction("する", "名前の公開：オン")),
+							linebot.NewQuickReplyButton("", linebot.NewMessageAction("しない", "名前の公開：オフ")),
 						))
 
 					_, err = bot.ReplyMessage(lineEvent.ReplyToken, textMessage).Do()
 					if err != nil {
 						log.Printf(`Failed to reply message: message %s`, err.Error())
 					}
-				case "名前の公開: オン":
+				case "名前の公開：オン":
 					_, err = firebase_.Client.Firestore.Doc("users/"+lineEvent.Source.UserID).Set(context.Background(), map[string]interface{}{
 						"isHidden": false,
 					}, firestore.MergeAll)
@@ -361,7 +361,7 @@ func (h *AppHandler) Webhook(c echo.Context) error {
 					if err != nil {
 						log.Printf(`Failed to reply message: message %s`, err.Error())
 					}
-				case "名前の公開: オフ":
+				case "名前の公開：オフ":
 					_, err = firebase_.Client.Firestore.Doc("users/"+lineEvent.Source.UserID).Set(context.Background(), map[string]interface{}{
 						"isHidden": true,
 					}, firestore.MergeAll)
@@ -666,7 +666,11 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 				result.AnswerersText = "回答者なし"
 			}
 		} else {
-			result.AnswerersText = fmt.Sprintf("%s 他%d人", strings.Join(answerers[:result.Count-elseCount], "、"), elseCount)
+			text := strings.Join(answerers[:result.Count-elseCount], "、")
+			if elseCount > 0 {
+				text = text + fmt.Sprintf(" 他%d人", elseCount)
+			}
+			result.AnswerersText = text
 		}
 	}
 
