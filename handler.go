@@ -652,12 +652,21 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 			return a
 		}(result.Answerers)
 
+		elseCount := result.Count
 		if len(answerers) > 10 {
-			result.AnswerersText = fmt.Sprintf("%s 他%d人", strings.Join(answerers, "、"), len(answerers)-10)
-		} else if len(answerers) > 0 {
-			result.AnswerersText = strings.Join(answerers, "、")
+			elseCount -= 10
 		} else {
-			result.AnswerersText = "回答者なし"
+			elseCount -= len(answerers)
+		}
+
+		if len(answerers) == 0 {
+			if result.Count > 0 {
+				result.AnswerersText = fmt.Sprintf("回答者%d人", elseCount)
+			} else {
+				result.AnswerersText = "回答者なし"
+			}
+		} else {
+			result.AnswerersText = fmt.Sprintf("%s 他%d人", strings.Join(answerers[:result.Count-elseCount], "、"), elseCount)
 		}
 	}
 
