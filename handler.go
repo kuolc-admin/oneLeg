@@ -53,13 +53,21 @@ type Problem struct {
 }
 
 type Answer struct {
-	ID          string `json:"-"`
-	ProblemID   string `json:"problemID"`
-	UserID      string `json:"userID"`
-	UserName    string `json:"userName"`
-	UserGroupID string `json:"userGroupID"`
-	Option      int    `json:"option"`
-	Comment     string `json:"comment"`
+	ID           string `json:"-"`
+	ProblemID    string `json:"problemID"`
+	UserID       string `json:"userID"`
+	UserName     string `json:"userName"`
+	UserGroupID  string `json:"userGroupID"`
+	UserIsHidden bool   `json:"userIsHidden"`
+	Option       int    `json:"option"`
+	Comment      string `json:"comment"`
+}
+
+type User struct {
+	ID       string `json:"-"`
+	Name     string `json:"name"`
+	GroupID  string `json:"groupID"`
+	IsHidden bool   `json:"isHidden"`
 }
 
 type OMap struct {
@@ -319,7 +327,7 @@ func (h *AppHandler) Webhook(c echo.Context) error {
 	for _, lineEvent := range lineEvents {
 		switch lineEvent.Source.Type {
 		case linebot.EventSourceTypeGroup:
-			log.Println(lineEvent.Source.GroupID)
+			log.Printf("%s: %s\n", botName, lineEvent.Source.GroupID)
 		}
 
 		switch lineEvent.Type {
@@ -328,21 +336,54 @@ func (h *AppHandler) Webhook(c echo.Context) error {
 			case *linebot.TextMessage:
 				queries := strings.Split(lineMessage.Text, "　")
 				switch queries[0] {
+				case "設定":
+					textMessage := linebot.NewTextMessage("名前の公開").
+						WithQuickReplies(linebot.NewQuickReplyItems(
+							linebot.NewQuickReplyButton("", linebot.NewMessageAction("する", "名前の公開: オン")),
+							linebot.NewQuickReplyButton("", linebot.NewMessageAction("しない", "名前の公開: オフ")),
+						))
+
+					_, err = bot.ReplyMessage(lineEvent.ReplyToken, textMessage).Do()
+					if err != nil {
+						log.Printf(`Failed to reply message: message %s`, err.Error())
+					}
+				case "名前の公開: オン":
+					_, err = firebase_.Client.Firestore.Doc("users/"+lineEvent.Source.UserID).Set(context.Background(), map[string]interface{}{
+						"isHidden": false,
+					}, firestore.MergeAll)
+
+					if err != nil {
+						log.Printf(`Failed to set isHidden = false: message %s`, err.Error())
+					}
+
+					textMessage := linebot.NewTextMessage("設定を更新しました！")
+					_, err = bot.ReplyMessage(lineEvent.ReplyToken, textMessage).Do()
+					if err != nil {
+						log.Printf(`Failed to reply message: message %s`, err.Error())
+					}
+				case "名前の公開: オフ":
+					_, err = firebase_.Client.Firestore.Doc("users/"+lineEvent.Source.UserID).Set(context.Background(), map[string]interface{}{
+						"isHidden": true,
+					}, firestore.MergeAll)
+
+					if err != nil {
+						log.Printf(`Failed to set isHidden = true: message %s`, err.Error())
+					}
+
+					textMessage := linebot.NewTextMessage("設定を更新しました！")
+					_, err = bot.ReplyMessage(lineEvent.ReplyToken, textMessage).Do()
+					if err != nil {
+						log.Printf(`Failed to reply message: message %s`, err.Error())
+					}
 				case "問題":
 					err = h.PushProblem(context.Background())
 					if err != nil {
-						log.Printf(`
-							Failed to push problem
-								message %s
-						`, err.Error())
+						log.Printf(`Failed to push problem: message %s`, err.Error())
 					}
 				case "解説":
 					err = h.PushEditorial(context.Background())
 					if err != nil {
-						log.Printf(`
-							Failed to push editorial
-								message %s
-						`, err.Error())
+						log.Printf(`Failed to push editorial: message %s`, err.Error())
 					}
 				case "地図":
 					maps := []*OMap{}
@@ -367,10 +408,7 @@ func (h *AppHandler) Webhook(c echo.Context) error {
 
 					_, err = bot.ReplyMessage(lineEvent.ReplyToken, linebot.NewTextMessage(strings.Join(lines, "\n"))).Do()
 					if err != nil {
-						log.Printf(`
-							Failed to reply message
-								message %s
-						`, err.Error())
+						log.Printf(`Failed to reply message: message %s`, err.Error())
 					}
 				}
 			}
@@ -410,22 +448,23 @@ func (h *AppHandler) LiffSubmit(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid parameter")
 	}
 
-	h.answers[param.UserID] = &Answer{
-		ProblemID:   h.problem.ID,
-		UserID:      param.UserID,
-		UserName:    param.UserName,
-		UserGroupID: param.UserGroupID,
-		Option:      param.Option,
-		Comment:     param.Comment,
+	answer := &Answer{
+		ProblemID:    h.problem.ID,
+		UserID:       param.UserID,
+		UserName:     param.UserName,
+		UserGroupID:  param.UserGroupID,
+		UserIsHidden: false,
+		Option:       param.Option,
+		Comment:      param.Comment,
 	}
 
-	_, err := firebase_.Client.Firestore.Doc("users/" + param.UserID).Get(context.Background())
+	userSnapshot, err := firebase_.Client.Firestore.Doc("users/" + param.UserID).Get(context.Background())
 	if err != nil {
-		_, err := firebase_.Client.Firestore.Doc("users/"+param.UserID).Create(context.Background(), map[string]interface{}{
+		_, err := firebase_.Client.Firestore.Doc("users/"+param.UserID).Set(context.Background(), map[string]interface{}{
 			"name":      param.UserName,
 			"groupID":   param.UserGroupID,
 			"createdAt": firestore.ServerTimestamp,
-		})
+		}, firestore.MergeAll)
 
 		if err != nil {
 			log.Printf(`
@@ -434,8 +473,15 @@ func (h *AppHandler) LiffSubmit(c echo.Context) error {
 					message %s
 			`, json_.Marshal(param), err.Error())
 		}
+	} else {
+		user := new(User)
+		err = userSnapshot.DataTo(user)
+		if err == nil {
+			answer.UserIsHidden = user.IsHidden
+		}
 	}
 
+	h.answers[param.UserID] = answer
 	return c.NoContent(http.StatusOK)
 }
 
@@ -529,10 +575,12 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 	}
 
 	type Result struct {
-		Option     string `json:"option"`
-		Rate       int    `json:"rate"`
-		Count      int    `json:"count"`
-		IsMajority bool   `json:"isMajority"`
+		Option        string   `json:"option"`
+		Rate          int      `json:"rate"`
+		Count         int      `json:"count"`
+		IsMajority    bool     `json:"isMajority"`
+		Answerers     []string `json:"answerers"`
+		AnswerersText string   `json:"answerersText"`
 	}
 
 	type Comment struct {
@@ -553,11 +601,19 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 
 	maxCount := 0
 	for _, answer := range h.answers {
-		count := results[answer.Option].Count + 1
-		results[answer.Option].Count = count
+		result := results[answer.Option]
+
+		count := result.Count + 1
+		result.Count = count
 		if count > maxCount {
 			maxCount = count
 		}
+
+		if !answer.UserIsHidden {
+			result.Answerers = append(result.Answerers, answer.UserName)
+		}
+
+		results[answer.Option] = result
 
 		if answer.Comment != "" {
 			comments = append(comments, &Comment{
@@ -586,6 +642,23 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 			result.Rate = result.Count * 100 / len(h.answers)
 		}
 		result.IsMajority = (result.Count == maxCount)
+
+		// Shuffle
+		answerers := func(a []string) []string {
+			for i := range a {
+				j := rand.Intn(i + 1)
+				a[i], a[j] = a[j], a[i]
+			}
+			return a
+		}(result.Answerers)
+
+		if len(answerers) > 10 {
+			result.AnswerersText = fmt.Sprintf("%s 他%d人", strings.Join(answerers, "、"), len(answerers)-10)
+		} else if len(answerers) > 0 {
+			result.AnswerersText = strings.Join(answerers, "、")
+		} else {
+			result.AnswerersText = "回答者なし"
+		}
 	}
 
 	aspectRatio, err := h.readImageAspectRatio(ctx, h.problem.EditorialImageURL)

@@ -12,6 +12,13 @@ local ResultCell(result) = {
             "wrap": false
         },
         {
+            "type": "text",
+            "text": result.answerersText,
+            "size": "xs",
+            "color": "#999999",
+            "wrap": true
+        },
+        {
             "type": "box",
             "layout": "horizontal",
             "contents": [
