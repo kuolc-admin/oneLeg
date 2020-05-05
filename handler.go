@@ -118,7 +118,6 @@ func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
 		case "出題済":
 			hasSubmitted, _ := value.(string)
 			p.HasSubmitted = (hasSubmitted == "1")
-			log.Println(p.HasSubmitted)
 		}
 	}
 
@@ -413,16 +412,16 @@ func (h *AppHandler) Webhook(c echo.Context) error {
 					if err != nil {
 						log.Printf(`Failed to reply message: message %s`, err.Error())
 					}
-				// case "問題":
-				// 	err = h.PushProblem(context.Background())
-				// 	if err != nil {
-				// 		log.Printf(`Failed to push problem: message %s`, err.Error())
-				// 	}
-				// case "解説":
-				// 	err = h.PushEditorial(context.Background())
-				// 	if err != nil {
-				// 		log.Printf(`Failed to push editorial: message %s`, err.Error())
-				// 	}
+				case "問題":
+					err = h.PushProblem(context.Background())
+					if err != nil {
+						log.Printf(`Failed to push problem: message %s`, err.Error())
+					}
+				case "解説":
+					err = h.PushEditorial(context.Background())
+					if err != nil {
+						log.Printf(`Failed to push editorial: message %s`, err.Error())
+					}
 				case "地図":
 					maps := []*OMap{}
 					for _, omap := range h.maps {
