@@ -23,7 +23,10 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 }
 
 func main() {
-	h := &AppHandler{}
+	h := &AppHandler{
+		problems: make(map[ProblemID]*Problem),
+		answers:  make(map[UserID]*Answer),
+	}
 
 	scheduler.Set("update_maps", func(cr *cron.Cron) *scheduler.Job {
 		cancel, _ := cr.Every(1).Day().At(consts.UpdateMapsAt()).Run(func() {
@@ -88,7 +91,8 @@ func main() {
 
 	e.Use(middleware.Recover())
 	e.POST("/webhook/:botName", h.Webhook)
-	e.GET("/liff", h.LiffPage)
+	e.GET("/liff", h.LiffIndex)
+	e.GET("/liff/problems/:problemID", h.LiffProblem)
 	e.POST("/liff", h.LiffSubmit)
 
 	e.HTTPErrorHandler = func(err error, c echo.Context) {

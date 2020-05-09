@@ -101,7 +101,7 @@ local args = std.parseJson(std.extVar("args"));
                 "action": {
                     "type":"uri",
                     "label":"回答する",
-                    "uri":"https://liff.line.me/1654090449-62QRAB0Z"
+                    "uri":"https://liff.line.me/1654090449-62QRAB0Z/liff/problems/" + args.problemID,
                 }
             }
         ],

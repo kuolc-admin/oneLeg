@@ -120,6 +120,7 @@
     </style>
 </head>
 <body>
+<input type="hidden" name="problemID" value="{{.problemID}}">
 <h3>問題</h3>
 <p>{{.text}}</p>
 <img src="{{.imageURL}}">
@@ -144,6 +145,7 @@
 liff.init({liffId: "1654090449-62QRAB0Z"});
 
 $('#button_submit').click(async function() {
+    const problemID = $('input[name="problemID"]').val();
     const option = $('input[name="option"]').val();
     const comment = $('input[name="comment"]').val();
     const profile = await liff.getProfile();
@@ -157,6 +159,7 @@ $('#button_submit').click(async function() {
         url: "/liff",
         type: 'POST',
         data: {
+            'problemID': problemID,
             'userID': profile.userId,
             'userName': profile.displayName,
             'userGroupID': context.groupId,

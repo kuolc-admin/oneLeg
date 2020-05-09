@@ -31,10 +31,14 @@ import (
 	"github.com/labstack/echo"
 )
 
+type ProblemID = string
+type UserID = string
+
 type AppHandler struct {
-	problem *Problem
-	answers map[string]*Answer
-	maps    []*OMap
+	todayProblem *Problem
+	problems     map[ProblemID]*Problem
+	answers      map[UserID]*Answer
+	maps         []*OMap
 }
 
 type Problem struct {
@@ -455,24 +459,33 @@ func (h *AppHandler) Webhook(c echo.Context) error {
 	return c.NoContent(http.StatusOK)
 }
 
-func (h *AppHandler) LiffPage(c echo.Context) error {
-	if h.problem == nil {
+func (h *AppHandler) LiffIndex(c echo.Context) error {
+	return c.Render(http.StatusOK, "index.html", map[string]interface{}{})
+}
+
+func (h *AppHandler) LiffProblem(c echo.Context) error {
+	problemID := c.Param("problemID")
+	problem := h.problems[problemID]
+
+	if problem == nil {
 		return c.NoContent(http.StatusOK)
 	}
 
-	return c.Render(http.StatusOK, "liff.html", map[string]interface{}{
-		"text":     h.problem.Text,
-		"imageURL": h.problem.ProblemImageURL,
-		"options":  h.problem.Options,
+	return c.Render(http.StatusOK, "problem.html", map[string]interface{}{
+		"problemID": problemID,
+		"text":      problem.Text,
+		"imageURL":  problem.ProblemImageURL,
+		"options":   problem.Options,
 	})
 }
 
 func (h *AppHandler) LiffSubmit(c echo.Context) error {
-	if h.problem == nil {
+	if h.todayProblem == nil {
 		return c.NoContent(http.StatusOK)
 	}
 
 	type Parameter struct {
+		ProblemID   string `json:"problemID"`
 		UserID      string `json:"userID"`
 		UserName    string `json:"userName"`
 		UserGroupID string `json:"userGroupID"`
@@ -485,8 +498,12 @@ func (h *AppHandler) LiffSubmit(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid parameter")
 	}
 
+	if h.todayProblem.ID != param.ProblemID {
+		return c.NoContent(http.StatusOK)
+	}
+
 	answer := &Answer{
-		ProblemID:    h.problem.ID,
+		ProblemID:    param.ProblemID,
 		UserID:       param.UserID,
 		UserName:     param.UserName,
 		UserGroupID:  param.UserGroupID,
@@ -558,7 +575,8 @@ func (h *AppHandler) PushProblem(ctx context.Context) error {
 	}
 
 	problem.ID = problemRef.ID
-	h.problem = problem
+	h.todayProblem = problem
+	h.problems[problem.ID] = problem
 	h.answers = map[string]*Answer{}
 
 	aspectRatio, err := h.readImageAspectRatio(ctx, problem.OriginalImageURL)
@@ -585,6 +603,7 @@ func (h *AppHandler) PushProblem(ctx context.Context) error {
 			"今日の1レッグ",
 			consts.ProblemTemplatePath(),
 			map[string]interface{}{
+				"problemID":        problem.ID,
 				"imageURL":         problem.OriginalImageURL,
 				"imageAspectRatio": aspectRatio,
 				"text":             problem.Text,
@@ -607,7 +626,7 @@ func (h *AppHandler) PushProblem(ctx context.Context) error {
 }
 
 func (h *AppHandler) PushEditorial(ctx context.Context) error {
-	if h.problem == nil {
+	if h.todayProblem == nil {
 		return nil
 	}
 
@@ -628,7 +647,7 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 	results := []*Result{}
 	comments := []*Comment{}
 
-	for _, option := range h.problem.Options {
+	for _, option := range h.todayProblem.Options {
 		results = append(results, &Result{
 			Option: option,
 			Rate:   0,
@@ -711,15 +730,15 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 		}
 	}
 
-	aspectRatio, err := h.readImageAspectRatio(ctx, h.problem.EditorialImageURL)
+	aspectRatio, err := h.readImageAspectRatio(ctx, h.todayProblem.EditorialImageURL)
 	if err != nil {
 		aspectRatio = "1:1"
 	}
 
 	args := json_.ToMap(map[string]interface{}{
-		"imageURL":         h.problem.EditorialImageURL,
+		"imageURL":         h.todayProblem.EditorialImageURL,
 		"imageAspectRatio": aspectRatio,
-		"text":             h.problem.Editorial,
+		"text":             h.todayProblem.Editorial,
 		"count":            len(h.answers),
 		"results":          results,
 		"comments":         comments,
@@ -750,9 +769,9 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 			log.Printf(`
 				Failed to push editorial
 					botName: %s
-					problemID: %d
+					problemIndex: %d
 					message: %s
-			`, botName, h.problem.Index, err.Error())
+			`, botName, h.todayProblem.Index, err.Error())
 		}
 	}
 
