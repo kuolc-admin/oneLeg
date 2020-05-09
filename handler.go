@@ -735,6 +735,19 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 		aspectRatio = "1:1"
 	}
 
+	if len(comments) > 20 {
+		// Shuffle
+		comments = func(a []*Comment) []*Comment {
+			for i := range a {
+				j := rand.Intn(i + 1)
+				a[i], a[j] = a[j], a[i]
+			}
+			return a
+		}(comments)
+
+		comments = comments[:20]
+	}
+
 	args := json_.ToMap(map[string]interface{}{
 		"imageURL":         h.todayProblem.EditorialImageURL,
 		"imageAspectRatio": aspectRatio,
