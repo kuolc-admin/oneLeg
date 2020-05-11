@@ -474,7 +474,7 @@ func (h *AppHandler) LiffProblem(c echo.Context) error {
 			return c.NoContent(http.StatusOK)
 		}
 
-		problem := new(Problem)
+		problem = new(Problem)
 		err = problemSnapshot.DataTo(problem)
 		if err != nil {
 			return c.NoContent(http.StatusOK)
