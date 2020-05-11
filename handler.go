@@ -585,7 +585,7 @@ func (h *AppHandler) PushProblem(ctx context.Context) error {
 	}
 
 	botNames := []string{
-		"CHIMPANZEE", "CRAB", "RABBIT", "HAMSTER",
+		"CHIMPANZEE", "CRAB", "RABBIT", "HAMSTER", "DEBUG",
 	}
 
 	for _, botName := range botNames {
