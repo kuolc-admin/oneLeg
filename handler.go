@@ -464,11 +464,23 @@ func (h *AppHandler) LiffIndex(c echo.Context) error {
 }
 
 func (h *AppHandler) LiffProblem(c echo.Context) error {
+	ctx := context.Background()
 	problemID := c.Param("problemID")
 	problem := h.problems[problemID]
 
 	if problem == nil {
-		return c.NoContent(http.StatusOK)
+		problemSnapshot, err := firebase_.Client.Firestore.Collection("problems").Doc(problemID).Get(ctx)
+		if err != nil {
+			return c.NoContent(http.StatusOK)
+		}
+
+		problem := new(Problem)
+		err = problemSnapshot.DataTo(problem)
+		if err != nil {
+			return c.NoContent(http.StatusOK)
+		}
+
+		h.problems[problemID] = problem
 	}
 
 	return c.Render(http.StatusOK, "problem.html", map[string]interface{}{
