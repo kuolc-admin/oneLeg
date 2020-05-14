@@ -770,7 +770,7 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 	})
 
 	botNames := []string{
-		"CHIMPANZEE", "CRAB", "RABBIT", "HAMSTER",
+		"CHIMPANZEE", "CRAB", "RABBIT", "HAMSTER", "BUFFALO",
 	}
 
 	for _, botName := range botNames {
