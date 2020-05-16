@@ -800,5 +800,6 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 		}
 	}
 
+	h.todayProblem = nil
 	return nil
 }
