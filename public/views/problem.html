@@ -189,6 +189,10 @@ $('#button_option3').click(function() {
     changeOption(3);
 });
 
+$('#button_option4').click(function() {
+    changeOption(4);
+});
+
 function changeOption(index) {
     const old_index = $('input[name="option"]').val();
     $('#button_option' + old_index).removeClass('btn-flat-filled');

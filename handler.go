@@ -129,7 +129,7 @@ func (p *Problem) FromRow(header []interface{}, row []interface{}) bool {
 		p.ProblemImageURL = p.OriginalImageURL
 	}
 
-	p.Options = options
+	p.Options = append(options, "その他")
 	return p.OriginalImageURL != ""
 }
 
