@@ -657,7 +657,7 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 	}
 
 	results := []*Result{}
-	comments := []*Comment{}
+	commentsDict := map[string][]*Comment{}
 
 	for _, option := range h.todayProblem.Options {
 		results = append(results, &Result{
@@ -665,6 +665,8 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 			Rate:   0,
 			Count:  0,
 		})
+
+		commentsDict[option] = []*Comment{}
 	}
 
 	maxCount := 0
@@ -684,7 +686,7 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 		results[answer.Option] = result
 
 		if answer.Comment != "" {
-			comments = append(comments, &Comment{
+			commentsDict[result.Option] = append(commentsDict[result.Option], &Comment{
 				UserName: answer.UserName,
 				Text:     answer.Comment,
 			})
@@ -711,14 +713,7 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 		}
 		result.IsMajority = (result.Count == maxCount)
 
-		// Shuffle
-		answerers := func(a []string) []string {
-			for i := range a {
-				j := rand.Intn(i + 1)
-				a[i], a[j] = a[j], a[i]
-			}
-			return a
-		}(result.Answerers)
+		answerers := result.Answerers
 
 		elseCount := result.Count
 		if len(answerers) > 10 {
@@ -747,26 +742,13 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 		aspectRatio = "1:1"
 	}
 
-	if len(comments) > 20 {
-		// Shuffle
-		comments = func(a []*Comment) []*Comment {
-			for i := range a {
-				j := rand.Intn(i + 1)
-				a[i], a[j] = a[j], a[i]
-			}
-			return a
-		}(comments)
-
-		comments = comments[:20]
-	}
-
 	args := json_.ToMap(map[string]interface{}{
 		"imageURL":         h.todayProblem.EditorialImageURL,
 		"imageAspectRatio": aspectRatio,
 		"text":             h.todayProblem.Editorial,
 		"count":            len(h.answers),
 		"results":          results,
-		"comments":         comments,
+		"commentsDict":     commentsDict,
 	})
 
 	botNames := []string{

@@ -141,9 +141,21 @@ local args = std.parseJson(std.extVar("args"));
                         "type": "separator",
                         "margin": "sm"
                     }
-                ] + [
-                    CommentCell(comment) for comment in args.comments
-                ],
+                ] + std.flattenArrays([
+                    (
+                        (if std.length(args.commentsDict[option]) > 0 then [
+                            {
+                                "type": "text",
+                                "text": option,
+                                "margin": "lg",
+                                "size": "md",
+                                "weight": "bold"
+                            },
+                        ] else []) + [
+                            CommentCell(comment) for comment in args.commentsDict[option]
+                        ]
+                    ) for option in std.objectFields(args.commentsDict)
+                ]),
                 "margin": "xxl"
             }
         ]
