@@ -143,18 +143,18 @@ local args = std.parseJson(std.extVar("args"));
                     }
                 ] + std.flattenArrays([
                     (
-                        (if std.length(args.commentsDict[option]) > 0 then [
+                        (if std.length(args.commentLists[index]) > 0 then [
                             {
                                 "type": "text",
-                                "text": option,
+                                "text": args.results[index].option,
                                 "margin": "lg",
                                 "size": "md",
                                 "weight": "bold"
                             },
                         ] else []) + [
-                            CommentCell(comment) for comment in args.commentsDict[option]
+                            CommentCell(comment) for comment in args.commentLists[index]
                         ]
-                    ) for option in std.objectFields(args.commentsDict)
+                    ) for index in std.range(0, std.length(args.commentLists) - 1)
                 ]),
                 "margin": "xxl"
             }

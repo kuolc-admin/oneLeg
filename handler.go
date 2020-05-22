@@ -657,7 +657,7 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 	}
 
 	results := []*Result{}
-	commentsDict := map[string][]*Comment{}
+	commentLists := [][]*Comment{}
 
 	for _, option := range h.todayProblem.Options {
 		results = append(results, &Result{
@@ -666,7 +666,7 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 			Count:  0,
 		})
 
-		commentsDict[option] = []*Comment{}
+		commentLists = append(commentLists, []*Comment{})
 	}
 
 	maxCount := 0
@@ -686,7 +686,7 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 		results[answer.Option] = result
 
 		if answer.Comment != "" {
-			commentsDict[result.Option] = append(commentsDict[result.Option], &Comment{
+			commentLists[answer.Option] = append(commentLists[answer.Option], &Comment{
 				UserName: answer.UserName,
 				Text:     answer.Comment,
 			})
@@ -748,7 +748,7 @@ func (h *AppHandler) PushEditorial(ctx context.Context) error {
 		"text":             h.todayProblem.Editorial,
 		"count":            len(h.answers),
 		"results":          results,
-		"commentsDict":     commentsDict,
+		"commentLists":     commentLists,
 	})
 
 	botNames := []string{
